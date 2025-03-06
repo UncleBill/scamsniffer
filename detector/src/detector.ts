@@ -818,14 +818,14 @@ export class Detector {
   database: Database;
   lastFetch: number | null;
   databaseUrl: string;
-  fetching: boolean;
+  fetching: Promise<void> | null;
 
   constructor({ onlyBuiltIn = true, databaseUrl = null }) {
     this.onlyBuiltIn = onlyBuiltIn;
     this.database = builtInDatabase;
     this.databaseUrl = databaseUrl || remoteDatabase;
     this.lastFetch = null;
-    this.fetching = false;
+    this.fetching = null;
     this.buildIndex();
   }
 
@@ -845,7 +845,8 @@ export class Detector {
   }
 
   async update() {
-    if (this.fetching) return;
+    const fetching = this.fetching
+    if (fetching) return fetching
     if (this.lastFetch) {
       const timeLeft = Date.now() - this.lastFetch;
       if (timeLeft < 1000 * 60 * 5) {
@@ -853,18 +854,20 @@ export class Detector {
       }
     }
 
-    this.fetching = true;
-    try {
-      const req = await fetch(this.databaseUrl);
-      const remoteData = await req.json();
-      this.database = remoteData;
-      await this.buildIndex();
-    } catch (e) {
-      console.error("fetch from remote failed", e);
-    }
+    this.fetching = new Promise<void>(async (resolve) => {
+      try {
+        const req = await fetch(this.databaseUrl);
+        const remoteData = await req.json();
+        this.database = remoteData;
+        await this.buildIndex();
+      } catch (e) {
+        console.error("fetch from remote failed", e);
+      }
 
-    this.fetching = false;
-    this.lastFetch = Date.now();
+      this.lastFetch = Date.now();
+      resolve()
+      this.fetching = null
+    })
   }
 
   async detectScam(
@@ -872,7 +875,7 @@ export class Detector {
     options: any = {}
   ): Promise<ScamResult | null> {
     try {
-      if (!this.onlyBuiltIn) this.update();
+      if (!this.onlyBuiltIn) await this.update();
       return await _detectScam(post, this.database, options);
     } catch (e) {
       console.error("error", e);
@@ -880,11 +883,15 @@ export class Detector {
     return null;
   }
 
-  async checkUrlInBlacklist(url: string): Promise<Boolean> {
+  async checkUrlInBlacklist(url: string): Promise<boolean> {
     const domain = getTopDomainFromUrl(url);
     if (!domain || domain === null) return false;
     if (domain.host === null) return false;
     return await checkIsInBlacklist("domains", domain.host);
+  }
+
+  async checkAddressInBlacklist(address: string): Promise<boolean> {
+    return await checkIsInBlacklist("address", address.toLowerCase());
   }
 
   async checkSiteStatus(url: string): Promise<any> {

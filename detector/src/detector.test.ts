@@ -1,7 +1,7 @@
 import { Detector } from "./detector";
 import { TEST_TWEETS } from "./__fixtures__/testTweets";
 import { BLACK_LIST } from './__fixtures__/blackList'
-import fs from 'fs';
+import { ScamResult } from "./types";
 
 jest.setTimeout(100 * 1000)
 
@@ -23,7 +23,7 @@ describe("Detector", () => {
        if (result != null) expect(1).toEqual(0);
      });
     test("test whiteList Tweets", async () => {
-        const listScam = []
+        const listScam: ScamResult[] = []
         for (let index = 0; index < TEST_TWEETS.length; index++) {
             const result = await detector.detectScam(TEST_TWEETS[index]);
             if (result) {
